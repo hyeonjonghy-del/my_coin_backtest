@@ -15,6 +15,7 @@ try:
         downsample_for_chart,
         period_split_validation,
     )
+    from .logic_experiments import compare_logic_experiments, split_logic_experiments
     from .run import fetch_upbit_daily
 except ImportError:  # Direct `streamlit run` execution from this directory.
     from adaptive_120_strategy import DEFAULT_CONFIG, backtest
@@ -24,6 +25,7 @@ except ImportError:  # Direct `streamlit run` execution from this directory.
         downsample_for_chart,
         period_split_validation,
     )
+    from logic_experiments import compare_logic_experiments, split_logic_experiments
     from run import fetch_upbit_daily
 
 
@@ -138,6 +140,18 @@ try:
             evaluation_start.isoformat(),
             evaluation_end.isoformat(),
         )
+        logic_comparison = compare_logic_experiments(
+            prices,
+            config,
+            evaluation_start.isoformat(),
+            evaluation_end.isoformat(),
+        )
+        logic_splits = split_logic_experiments(
+            prices,
+            config,
+            evaluation_start.isoformat(),
+            evaluation_end.isoformat(),
+        )
 except Exception as exc:
     st.exception(exc)
     st.stop()
@@ -165,6 +179,7 @@ else:
     action = "일부 매도"
 
 signal_name = {
+    "RECOVERY_REENTRY": "급락 후 회복 재진입",
     "ENTER_OR_HOLD": "상승 추세 진입·유지",
     "EXIT_OR_CASH": "추세 이탈·현금화",
     "HYSTERESIS_HOLD": "완충 구간·기존 상태 유지",
@@ -191,8 +206,8 @@ monthly_display = monthly_returns.apply(
     lambda column: column.map(lambda value: "-" if pd.isna(value) else f"{value * 100:+.2f}%")
 )
 
-performance_tab, comparison_tab, validation_tab, monthly_tab = st.tabs(
-    ["성과", "이평선 비교", "기간분할 검증", "월별 수익률"]
+performance_tab, comparison_tab, validation_tab, experiment_tab, monthly_tab = st.tabs(
+    ["성과", "이평선 비교", "기간분할 검증", "2개 로직 실험", "월별 수익률"]
 )
 
 with performance_tab:
@@ -402,6 +417,82 @@ with validation_tab:
         "기간분할 결과 CSV 다운로드",
         data=split_results.to_csv(index=False).encode("utf-8-sig"),
         file_name="btc_period_split_validation.csv",
+        mime="text/csv",
+    )
+
+with experiment_tab:
+    st.subheader("체크한 두 로직의 통제 실험")
+    st.caption(
+        "기존 Adaptive 120, 급락 후 회복 재진입만, 안정형 변동성 비중만, 두 로직 결합을 "
+        "동일한 기간·비용·다음 날 시가 체결 조건으로 비교합니다. 다른 전략 규칙은 변경하지 않았습니다."
+    )
+    st.markdown(
+        "- **회복 재진입:** 최근 90일 고점 대비 20% 이상 급락한 이력이 있고, "
+        "최근 30일 저점에서 10% 반등하여 120일 하단 밴드로 복귀하면 재진입\n"
+        "- **안정형 변동성 비중:** 20일·60일 변동성 중 높은 값을 사용하고, "
+        "비중 축소는 즉시·증액은 25%씩 단계적으로 반영"
+    )
+
+    experiment_display = logic_comparison.copy()
+    for column in ["CAGR", "MDD", "누적수익률", "평균 익스포저"]:
+        experiment_display[column] = experiment_display[column].map(
+            lambda value: f"{value * 100:,.2f}%"
+        )
+    experiment_display["Sharpe"] = experiment_display["Sharpe"].map(lambda value: f"{value:.2f}")
+    experiment_display["총 회전율"] = experiment_display["총 회전율"].map(
+        lambda value: f"{value:.2f}배"
+    )
+    st.dataframe(experiment_display, width="stretch")
+
+    baseline = logic_comparison.loc["기존 Adaptive 120"]
+    combined = logic_comparison.loc["두 로직 결합"]
+    d1, d2, d3 = st.columns(3)
+    d1.metric(
+        "결합 CAGR",
+        f"{combined['CAGR'] * 100:.2f}%",
+        f"{(combined['CAGR'] - baseline['CAGR']) * 100:+.2f}%p vs 기존",
+    )
+    d2.metric(
+        "결합 MDD",
+        f"{combined['MDD'] * 100:.2f}%",
+        f"{(combined['MDD'] - baseline['MDD']) * 100:+.2f}%p vs 기존",
+    )
+    d3.metric(
+        "결합 Sharpe",
+        f"{combined['Sharpe']:.2f}",
+        f"{combined['Sharpe'] - baseline['Sharpe']:+.2f} vs 기존",
+    )
+
+    dominates = (
+        (combined["CAGR"] > baseline["CAGR"])
+        and (combined["MDD"] > baseline["MDD"])
+        and (combined["Sharpe"] > baseline["Sharpe"])
+    )
+    if dominates:
+        st.success("두 로직 결합이 기존 전략보다 CAGR·MDD·Sharpe를 모두 개선했습니다.")
+    else:
+        st.warning(
+            "두 로직 결합이 기존 전략을 모든 핵심 지표에서 이기지는 못했습니다. "
+            "따라서 실험 결과를 확인하되 기본 실전 로직으로 자동 채택하지 않습니다."
+        )
+
+    st.markdown("#### 시간순 3구간 재검증")
+    split_experiment_display = logic_splits[
+        ["기간", "시작일", "종료일", "실험", "CAGR", "MDD", "Sharpe", "재진입 횟수"]
+    ].copy()
+    for column in ["CAGR", "MDD"]:
+        split_experiment_display[column] = split_experiment_display[column].map(
+            lambda value: f"{value * 100:+.2f}%"
+        )
+    split_experiment_display["Sharpe"] = split_experiment_display["Sharpe"].map(
+        lambda value: f"{value:.2f}"
+    )
+    st.dataframe(split_experiment_display, hide_index=True, width="stretch")
+
+    st.download_button(
+        "두 로직 실험 CSV 다운로드",
+        data=logic_splits.to_csv(index=False).encode("utf-8-sig"),
+        file_name="btc_two_logic_experiments.csv",
         mime="text/csv",
     )
 

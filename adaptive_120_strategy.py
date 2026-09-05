@@ -17,6 +17,14 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "maximum_exposure": 1.0,
     "transaction_cost_per_turnover": 0.001,
     "annual_financing_rate": 0.0,
+    "enable_recovery_reentry": False,
+    "recovery_peak_lookback": 90,
+    "recovery_event_lookback": 30,
+    "recovery_drawdown_threshold": 0.20,
+    "recovery_rebound_threshold": 0.10,
+    "enable_stable_volatility_sizing": False,
+    "slow_volatility_days": 60,
+    "exposure_increase_speed": 0.25,
 }
 
 
@@ -49,20 +57,78 @@ def prepare_signals(data: pd.DataFrame, config: Mapping[str, Any] | None = None)
 
     enter = frame["close"] > frame["upper_band"]
     exit_ = frame["close"] < frame["lower_band"]
-    trend_state = pd.Series(np.nan, index=frame.index, dtype=float)
-    trend_state.loc[enter] = 1.0
-    trend_state.loc[exit_] = 0.0
-    frame["trend_state"] = trend_state.ffill().fillna(0.0)
+    frame["rolling_peak"] = frame["close"].rolling(
+        int(cfg["recovery_peak_lookback"]), min_periods=int(cfg["recovery_peak_lookback"])
+    ).max()
+    frame["drawdown_from_peak"] = frame["close"] / frame["rolling_peak"] - 1.0
+    recent_crash = frame["drawdown_from_peak"].rolling(
+        int(cfg["recovery_event_lookback"]), min_periods=1
+    ).min() <= -float(cfg["recovery_drawdown_threshold"])
+    recent_low = frame["close"].rolling(
+        int(cfg["recovery_event_lookback"]), min_periods=1
+    ).min()
+    recovery_enter = (
+        recent_crash
+        & (frame["close"] >= recent_low * (1.0 + float(cfg["recovery_rebound_threshold"])))
+        & (frame["close"] >= frame["lower_band"])
+    )
+    if not bool(cfg["enable_recovery_reentry"]):
+        recovery_enter = pd.Series(False, index=frame.index)
 
+    # Recovery is an alternative cash-to-market entry. Once entered, the same
+    # lower 120-day band remains the exit rule, avoiding a separate fitted exit.
+    state_values: list[float] = []
+    state = 0.0
+    recovery_entries: list[bool] = []
+    for standard_entry, standard_exit, recovery in zip(enter, exit_, recovery_enter):
+        recovery_triggered = False
+        if standard_exit:
+            state = 0.0
+        elif standard_entry:
+            state = 1.0
+        elif state == 0.0 and recovery:
+            state = 1.0
+            recovery_triggered = True
+        state_values.append(state)
+        recovery_entries.append(recovery_triggered)
+    frame["trend_state"] = state_values
+    frame["recovery_entry"] = recovery_entries
+
+    frame["slow_realized_volatility"] = (
+        frame["close"].pct_change().rolling(int(cfg["slow_volatility_days"])).std(ddof=1)
+        * np.sqrt(365.0)
+    )
+    sizing_volatility = frame["realized_volatility"]
+    if bool(cfg["enable_stable_volatility_sizing"]):
+        # Never size from a volatility estimate lower than either the fast or
+        # slow estimate. This reacts quickly to shocks but normalises gradually.
+        sizing_volatility = pd.concat(
+            [frame["realized_volatility"], frame["slow_realized_volatility"]], axis=1
+        ).max(axis=1)
+    frame["sizing_volatility"] = sizing_volatility
     volatility_multiplier = (
-        float(cfg["target_annual_volatility"]) / frame["realized_volatility"]
+        float(cfg["target_annual_volatility"]) / sizing_volatility
     ).clip(
         lower=float(cfg["minimum_exposure"]),
         upper=float(cfg["maximum_exposure"]),
     )
-    frame["desired_exposure"] = (frame["trend_state"] * volatility_multiplier).fillna(0.0)
+    raw_exposure = (frame["trend_state"] * volatility_multiplier).fillna(0.0)
+    if bool(cfg["enable_stable_volatility_sizing"]):
+        # Cut risk immediately; phase risk additions in to reduce pro-cyclical
+        # daily turnover after volatility falls.
+        speed = float(cfg["exposure_increase_speed"])
+        stable_values: list[float] = []
+        previous = 0.0
+        for target in raw_exposure:
+            previous = target if target <= previous else previous + speed * (target - previous)
+            stable_values.append(previous)
+        frame["desired_exposure"] = stable_values
+    else:
+        frame["desired_exposure"] = raw_exposure
     frame["signal"] = np.select(
-        [enter, exit_], ["ENTER_OR_HOLD", "EXIT_OR_CASH"], default="HYSTERESIS_HOLD"
+        [frame["recovery_entry"], enter, exit_],
+        ["RECOVERY_REENTRY", "ENTER_OR_HOLD", "EXIT_OR_CASH"],
+        default="HYSTERESIS_HOLD",
     )
     return frame
 

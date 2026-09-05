@@ -7,6 +7,14 @@
   "minimum_exposure": 0.25,
   "maximum_exposure": 1.0,
   "transaction_cost_per_turnover": 0.001,
-  "annual_financing_rate": 0.0
+  "annual_financing_rate": 0.0,
+  "enable_recovery_reentry": false,
+  "recovery_peak_lookback": 90,
+  "recovery_event_lookback": 30,
+  "recovery_drawdown_threshold": 0.20,
+  "recovery_rebound_threshold": 0.10,
+  "enable_stable_volatility_sizing": false,
+  "slow_volatility_days": 60,
+  "exposure_increase_speed": 0.25
 }
 
