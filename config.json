@@ -1,0 +1,20 @@
+{
+  "initial_capital": 10000000,
+  "fee_rate": 0.0005,
+  "slippage_rate": 0.0005,
+  "risk_per_trade": 0.005,
+  "transition_exposure_cap": 0.35,
+  "confirmed_exposure_cap": 0.60,
+  "breakout_lookback": 20,
+  "breakout_volume_multiple": 1.20,
+  "breakout_stop_atr": 1.10,
+  "pullback_stop_atr": 1.60,
+  "trailing_stop_atr": 2.00,
+  "partial_take_profit_r": 2.00,
+  "partial_take_profit_fraction": 0.35,
+  "shallow_rsi_min": 50.0,
+  "shallow_rsi_max": 70.0,
+  "deep_rsi_min": 45.0,
+  "deep_rsi_max": 65.0
+}
+
