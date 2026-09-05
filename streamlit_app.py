@@ -9,9 +9,21 @@ import streamlit as st
 
 try:
     from .adaptive_120_strategy import DEFAULT_CONFIG, backtest
+    from .analysis_tools import (
+        MA_CANDIDATES,
+        compare_moving_averages,
+        downsample_for_chart,
+        period_split_validation,
+    )
     from .run import fetch_upbit_daily
 except ImportError:  # Direct `streamlit run` execution from this directory.
     from adaptive_120_strategy import DEFAULT_CONFIG, backtest
+    from analysis_tools import (
+        MA_CANDIDATES,
+        compare_moving_averages,
+        downsample_for_chart,
+        period_split_validation,
+    )
     from run import fetch_upbit_daily
 
 
@@ -27,7 +39,7 @@ st.set_page_config(
 )
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=21600, max_entries=4, show_spinner=False)
 def download_prices(start: str, end: str) -> pd.DataFrame:
     return fetch_upbit_daily(start, end, include_incomplete=False)
 
@@ -37,10 +49,10 @@ def metric_percent(label: str, value: float, comparison: float | None = None) ->
     st.metric(label, f"{value * 100:,.2f}%", delta)
 
 
-st.title("업비트 BTC/KRW Adaptive 120 백테스트")
+st.title("코인 전용 BTC/KRW Adaptive 120 백테스트")
 st.caption(
     "확정 일봉의 120일 추세와 20일 실현변동성으로 익스포저를 조절합니다. "
-    "반감기는 참고 정보이며 매매 신호에는 사용하지 않습니다."
+    "기본값은 업비트 현물 운용 기준이며, 반감기는 참고 정보로만 사용합니다."
 )
 
 with st.sidebar:
@@ -63,23 +75,15 @@ with st.sidebar:
     buffer_pct = st.slider("진입·청산 완충폭", 0.0, 5.0, 2.0, 0.25)
     vol_days = st.slider("실현변동성 기간", 10, 60, 20)
     target_vol_pct = st.slider("목표 연 변동성", 20, 120, 80, 5)
-    max_exposure = st.slider("최대 익스포저", 0.50, 1.50, 1.00, 0.05)
+    max_exposure = st.slider("최대 익스포저", 0.50, 1.00, 1.00, 0.05)
     min_exposure = st.slider("최소 익스포저", 0.0, min(0.75, max_exposure), 0.25, 0.05)
+    st.caption("현물 전용 설정: 투자비중은 원금의 100%를 초과하지 않습니다.")
 
     st.header("비용 설정")
     turnover_cost_pct = st.number_input(
         "비중 변경 비용(%)", min_value=0.0, max_value=2.0, value=0.10, step=0.01
     )
-    financing_pct = st.number_input(
-        "100% 초과분 연 금융비용(%)", min_value=0.0, max_value=50.0, value=10.0, step=0.5
-    )
-    run_clicked = st.button("백테스트 실행", type="primary", use_container_width=True)
-
-if max_exposure > 1.0:
-    st.warning(
-        "최대 익스포저가 100%를 초과합니다. 업비트 현물만으로는 구현할 수 없으며, "
-        "파생상품·차입에는 청산, 펀딩비, 추적오차 위험이 있습니다."
-    )
+    run_clicked = st.button("백테스트 실행", type="primary", width="stretch")
 
 if not run_clicked:
     st.info("왼쪽에서 조건을 설정한 뒤 ‘백테스트 실행’을 누르세요.")
@@ -114,13 +118,25 @@ try:
             "minimum_exposure": min_exposure,
             "maximum_exposure": max_exposure,
             "transaction_cost_per_turnover": turnover_cost_pct / 100.0,
-            "annual_financing_rate": financing_pct / 100.0,
+            "annual_financing_rate": 0.0,
         }
         result = backtest(
             prices,
             config,
             evaluation_start=evaluation_start.isoformat(),
             evaluation_end=evaluation_end.isoformat(),
+        )
+        ma_comparison = compare_moving_averages(
+            prices,
+            config,
+            evaluation_start.isoformat(),
+            evaluation_end.isoformat(),
+        )
+        split_results = period_split_validation(
+            prices,
+            config,
+            evaluation_start.isoformat(),
+            evaluation_end.isoformat(),
         )
 except Exception as exc:
     st.exception(exc)
@@ -134,7 +150,7 @@ current_exposure = float(latest["position"])
 target_exposure = float(latest["desired_exposure"])
 adjustment = target_exposure - current_exposure
 signal_date = pd.Timestamp(latest.name)
-execution_date = signal_date + pd.Timedelta(days=1)
+execution_date = signal_date + pd.DateOffset(days=1)
 tolerance = 0.005
 
 if abs(adjustment) <= tolerance:
@@ -175,7 +191,9 @@ monthly_display = monthly_returns.apply(
     lambda column: column.map(lambda value: "-" if pd.isna(value) else f"{value * 100:+.2f}%")
 )
 
-performance_tab, monthly_tab = st.tabs(["Performance", "Monthly Returns"])
+performance_tab, comparison_tab, validation_tab, monthly_tab = st.tabs(
+    ["성과", "이평선 비교", "기간분할 검증", "월별 수익률"]
+)
 
 with performance_tab:
     st.subheader("실전 시그널")
@@ -218,7 +236,7 @@ with performance_tab:
             ],
         }
     )
-    st.dataframe(signal_details, hide_index=True, use_container_width=True)
+    st.dataframe(signal_details, hide_index=True, width="stretch")
     st.caption(
         "주문 기준: 현재 총 평가금액 × 조정폭입니다. 조정폭이 +이면 매수, -이면 매도합니다. "
         "신호는 확정 일봉으로 계산하며 백테스트와 동일하게 다음 일봉 시가에 적용합니다."
@@ -236,9 +254,10 @@ with performance_tab:
     with c4:
         st.metric("평균 익스포저", f"{m['strategy_average_exposure'] * 100:.1f}%")
 
+    strategy_label = f"Adaptive {ma_days}"
     comparison = pd.DataFrame(
         {
-            "Adaptive 120": {
+            strategy_label: {
                 "누적수익률": m["strategy_total_return"],
                 "CAGR": m["strategy_cagr"],
                 "MDD": m["strategy_max_drawdown"],
@@ -254,21 +273,21 @@ with performance_tab:
             },
         }
     )
-    display = comparison.copy()
+    display = comparison.astype(object).copy()
     for row in ["누적수익률", "CAGR", "MDD", "연 변동성"]:
         display.loc[row] = comparison.loc[row].map(lambda value: f"{value * 100:,.2f}%")
     display.loc["Sharpe"] = comparison.loc["Sharpe"].map(lambda value: f"{value:.2f}")
-    st.dataframe(display, use_container_width=True)
+    st.dataframe(display, width="stretch")
 
     st.subheader("자산곡선")
     equity = daily[["strategy_equity", "buy_hold_equity"]].rename(
-        columns={"strategy_equity": "Adaptive 120", "buy_hold_equity": "단순보유"}
+        columns={"strategy_equity": f"Adaptive {ma_days}", "buy_hold_equity": "단순보유"}
     )
-    st.line_chart(equity)
+    st.line_chart(downsample_for_chart(equity))
 
     st.subheader("낙폭(MDD) 차트")
     drawdown = equity.div(equity.cummax()).sub(1.0)
-    st.line_chart(drawdown)
+    st.line_chart(downsample_for_chart(drawdown))
     st.caption(
         "각 시점의 이전 최고 자산 대비 하락률입니다. 0%에 가까울수록 고점 부근이며, "
         "가장 낮은 값이 해당 전략의 MDD입니다."
@@ -276,13 +295,15 @@ with performance_tab:
 
     st.subheader("가격과 추세 밴드")
     st.line_chart(
-        daily[["close", "sma", "upper_band", "lower_band"]].rename(
+        downsample_for_chart(daily[["close", "sma", "upper_band", "lower_band"]]).rename(
             columns={"close": "BTC/KRW", "sma": "SMA", "upper_band": "상단", "lower_band": "하단"}
         )
     )
 
     st.subheader("투자비중")
-    st.area_chart(daily[["position"]].rename(columns={"position": "익스포저"}))
+    st.area_chart(
+        downsample_for_chart(daily[["position"]]).rename(columns={"position": "익스포저"})
+    )
 
     st.download_button(
         "일별 결과 CSV 다운로드",
@@ -297,9 +318,96 @@ with performance_tab:
         mime="application/json",
     )
 
+with comparison_tab:
+    st.subheader("100·110·120·130·140일 이동평균 비교")
+    st.caption(
+        "모든 후보에 동일한 기간, 완충폭, 변동성 목표, 비용 조건을 적용합니다. "
+        "수익률만이 아니라 MDD와 Sharpe를 함께 확인하세요."
+    )
+    comparison_display = ma_comparison.copy()
+    for column in ["CAGR", "MDD", "누적수익률", "평균 익스포저"]:
+        comparison_display[column] = comparison_display[column].map(lambda value: f"{value * 100:,.2f}%")
+    comparison_display["Sharpe"] = comparison_display["Sharpe"].map(lambda value: f"{value:.2f}")
+    comparison_display.index = [f"{days}일" for days in comparison_display.index]
+    st.dataframe(comparison_display, width="stretch")
+
+    chart_values = ma_comparison[["CAGR", "MDD"]].mul(100.0)
+    chart_values.index = [f"{days}일" for days in chart_values.index]
+    st.bar_chart(chart_values)
+
+    best_cagr = int(ma_comparison["CAGR"].idxmax())
+    best_sharpe = int(ma_comparison["Sharpe"].idxmax())
+    st.info(
+        f"전체 기간 최고 CAGR은 {best_cagr}일, 최고 Sharpe는 {best_sharpe}일입니다. "
+        "전체 기간 1등만으로 확정하지 말고 아래 기간분할 결과도 함께 판단해야 합니다."
+    )
+
+    st.download_button(
+        "이평선 비교 CSV 다운로드",
+        data=ma_comparison.to_csv(index=True).encode("utf-8-sig"),
+        file_name="btc_moving_average_comparison.csv",
+        mime="text/csv",
+    )
+
+with validation_tab:
+    st.subheader("시간순 3구간 기간분할 검증")
+    st.caption(
+        "평가기간을 일봉 개수가 비슷한 세 구간으로 나누어 독립적으로 다시 시작합니다. "
+        "여러 구간에서 반복해서 양호한 후보가 한 구간에서만 높은 후보보다 견고합니다."
+    )
+
+    split_summary = split_results.groupby("이동평균").agg(
+        기간별_중앙_CAGR=("CAGR", "median"),
+        기간별_최저_CAGR=("CAGR", "min"),
+        최악_MDD=("MDD", "min"),
+        중앙_Sharpe=("Sharpe", "median"),
+    )
+    outperform_count = (
+        split_results.assign(
+            outperform=split_results["CAGR"] > split_results["단순보유 CAGR"]
+        )
+        .groupby("이동평균")["outperform"]
+        .sum()
+        .astype(int)
+    )
+    split_summary["단순보유보다_높은_CAGR_구간"] = outperform_count
+    summary_display = split_summary.copy()
+    for column in ["기간별_중앙_CAGR", "기간별_최저_CAGR", "최악_MDD"]:
+        summary_display[column] = summary_display[column].map(lambda value: f"{value * 100:,.2f}%")
+    summary_display["중앙_Sharpe"] = summary_display["중앙_Sharpe"].map(lambda value: f"{value:.2f}")
+    summary_display["단순보유보다_높은_CAGR_구간"] = summary_display[
+        "단순보유보다_높은_CAGR_구간"
+    ].map(lambda value: f"{value}/3")
+    summary_display.index = [f"{days}일" for days in summary_display.index]
+    st.dataframe(summary_display, width="stretch")
+
+    cagr_pivot = split_results.pivot(index="기간", columns="이동평균", values="CAGR")
+    cagr_pivot.columns = [f"{days}일" for days in cagr_pivot.columns]
+    cagr_display = cagr_pivot.apply(
+        lambda column: column.map(lambda value: f"{value * 100:+.2f}%")
+    )
+    date_labels = split_results.drop_duplicates("기간").set_index("기간")[["시작일", "종료일"]]
+    st.markdown("#### 구간별 CAGR")
+    st.dataframe(date_labels.join(cagr_display), width="stretch")
+
+    mdd_pivot = split_results.pivot(index="기간", columns="이동평균", values="MDD")
+    mdd_pivot.columns = [f"{days}일" for days in mdd_pivot.columns]
+    st.markdown("#### 구간별 MDD")
+    mdd_display = mdd_pivot.apply(
+        lambda column: column.map(lambda value: f"{value * 100:.2f}%")
+    )
+    st.dataframe(mdd_display, width="stretch")
+
+    st.download_button(
+        "기간분할 결과 CSV 다운로드",
+        data=split_results.to_csv(index=False).encode("utf-8-sig"),
+        file_name="btc_period_split_validation.csv",
+        mime="text/csv",
+    )
+
 with monthly_tab:
     st.subheader("월별 수익률")
-    st.dataframe(monthly_display, use_container_width=True)
+    st.dataframe(monthly_display, width="stretch")
     st.caption(
         "각 월의 전략 수익률이며, 맨 오른쪽 ‘연 수익률’은 해당 연도의 월 수익률을 복리로 합산한 값입니다."
     )

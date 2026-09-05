@@ -16,7 +16,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "minimum_exposure": 0.25,
     "maximum_exposure": 1.0,
     "transaction_cost_per_turnover": 0.001,
-    "annual_financing_rate": 0.10,
+    "annual_financing_rate": 0.0,
 }
 
 

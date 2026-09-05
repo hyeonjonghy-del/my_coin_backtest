@@ -21,16 +21,16 @@
 저장소 루트에서:
 
 ```powershell
-python strategies/upbit_btc_daily/run.py --start 2018-01-01
+python run.py --start 2018-01-01
 ```
 
 인터넷 없이 자체 CSV로 실행하려면 `date_utc,open,high,low,close,volume` 열을 준비합니다.
 
 ```powershell
-python strategies/upbit_btc_daily/run.py --csv C:\path\btc_daily.csv
+python run.py --csv C:\path\btc_daily.csv
 ```
 
-결과는 기본적으로 `strategies/upbit_btc_daily/results`에 저장됩니다.
+결과는 기본적으로 저장소 루트의 `results`에 저장됩니다.
 
 - `upbit_btc_krw_daily.csv`: 원본 일봉
 - `signals_and_indicators.csv`: 지표와 매수 신호
@@ -48,18 +48,18 @@ python strategies/upbit_btc_daily/run.py --csv C:\path\btc_daily.csv
 - 종가가 SMA120의 2% 아래로 내려가면 현금화
 - 두 밴드 사이에서는 기존 상태 유지
 - 20일 실현변동성을 기준으로 연 80% 변동성을 목표
-- 익스포저 범위 0.25~1.25배, 레버리지 부분에는 연 10% 비용 반영
+- 익스포저 범위 0.25~1.00배의 업비트 현물 운용
 - 거래비용은 비중 변경액의 0.1%
 - 반감기는 결과 보고용 정보로만 사용하고 매매 신호에는 사용하지 않음
 
 ```powershell
-python strategies/upbit_btc_daily/run_adaptive_120.py --download-start 2018-01-01 --evaluation-start 2018-05-01
+python run_adaptive_120.py --download-start 2018-01-01 --evaluation-start 2018-05-01
 ```
 
 이미 받은 CSV를 사용할 수도 있습니다.
 
 ```powershell
-python strategies/upbit_btc_daily/run_adaptive_120.py --csv strategies/upbit_btc_daily/results/upbit_btc_krw_daily.csv
+python run_adaptive_120.py --csv results/upbit_btc_krw_daily.csv
 ```
 
 ## Streamlit 웹 앱
@@ -67,18 +67,22 @@ python strategies/upbit_btc_daily/run_adaptive_120.py --csv strategies/upbit_btc
 로컬 실행:
 
 ```powershell
-python -m streamlit run strategies/upbit_btc_daily/streamlit_app.py
+python -m streamlit run streamlit_app.py
 ```
 
 GitHub에 푸시한 후 Streamlit Community Cloud에서 다음 값을 선택합니다.
 
 - Repository: 이 프로젝트를 올린 GitHub 저장소
 - Branch: `master` 또는 실제 배포 브랜치
-- Main file path: `strategies/upbit_btc_daily/streamlit_app.py`
-
-기존 `my_backtest` Streamlit 앱에서는 `pages/12_Upbit_BTC_Adaptive_120.py`가
-같은 화면을 멀티페이지 메뉴에 자동으로 추가합니다.
+- Main file path: `streamlit_app.py`
 
 배포용 `requirements.txt`는 앱 파일과 같은 폴더에 있습니다. 앱은 업비트 공개 API를
-메모리에서 조회하고 결과를 다운로드 버튼으로 제공하므로 API 키와 영구 파일 저장소가
+6시간 캐시하고 결과를 다운로드 버튼으로 제공하므로 API 키와 영구 파일 저장소가
 필요하지 않습니다.
+
+웹 앱에는 다음 견고성 검증 기능이 포함됩니다.
+
+- 100·110·120·130·140일 이동평균을 동일 조건으로 비교
+- 평가기간을 시간순 3개 구간으로 나누어 CAGR·MDD·Sharpe 재검증
+- 전체 기간과 기간분할 결과를 각각 CSV로 다운로드
+- 장기 차트의 표시 점을 줄이되 시작·종료점과 최저·최고점은 보존
