@@ -266,6 +266,14 @@ with performance_tab:
     )
     st.line_chart(equity)
 
+    st.subheader("낙폭(MDD) 차트")
+    drawdown = equity.div(equity.cummax()).sub(1.0)
+    st.line_chart(drawdown)
+    st.caption(
+        "각 시점의 이전 최고 자산 대비 하락률입니다. 0%에 가까울수록 고점 부근이며, "
+        "가장 낮은 값이 해당 전략의 MDD입니다."
+    )
+
     st.subheader("가격과 추세 밴드")
     st.line_chart(
         daily[["close", "sma", "upper_band", "lower_band"]].rename(
