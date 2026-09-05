@@ -1,0 +1,12 @@
+{
+  "initial_capital": 10000000,
+  "moving_average_days": 120,
+  "entry_exit_buffer": 0.02,
+  "realized_volatility_days": 20,
+  "target_annual_volatility": 0.80,
+  "minimum_exposure": 0.25,
+  "maximum_exposure": 1.25,
+  "transaction_cost_per_turnover": 0.001,
+  "annual_financing_rate": 0.10
+}
+
