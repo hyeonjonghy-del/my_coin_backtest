@@ -14,7 +14,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "realized_volatility_days": 20,
     "target_annual_volatility": 0.80,
     "minimum_exposure": 0.25,
-    "maximum_exposure": 1.25,
+    "maximum_exposure": 1.0,
     "transaction_cost_per_turnover": 0.001,
     "annual_financing_rate": 0.10,
 }
