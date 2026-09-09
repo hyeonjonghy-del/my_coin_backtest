@@ -26,5 +26,11 @@ def test_formats_changed_exposure():
     changed, message = build_alert(sample(0.25, 0.75))
     assert changed
     assert "추가 매수" in message
-    assert "75.0%" in message
-    assert "+50.0%p" in message
+    assert "75.00%" in message
+    assert "+50.00%p" in message
+
+
+def test_alerts_on_small_exposure_change():
+    changed, message = build_alert(sample(0.7500, 0.7501))
+    assert changed
+    assert "+0.01%p" in message

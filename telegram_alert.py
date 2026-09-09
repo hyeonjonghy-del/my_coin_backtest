@@ -15,7 +15,7 @@ from adaptive_120_strategy import DEFAULT_CONFIG, backtest
 from run import fetch_upbit_daily
 
 
-CHANGE_TOLERANCE = 0.005
+CHANGE_TOLERANCE = 1e-9
 
 
 def build_alert(daily: pd.DataFrame) -> tuple[bool, str]:
@@ -40,9 +40,9 @@ def build_alert(daily: pd.DataFrame) -> tuple[bool, str]:
     message = (
         "🔔 <b>BTC Adaptive 120 비중 변경</b>\n\n"
         f"판단: <b>{action}</b>\n"
-        f"현재 모델 비중: {current * 100:.1f}%\n"
-        f"새 목표 비중: <b>{target * 100:.1f}%</b>\n"
-        f"조정폭: {change * 100:+.1f}%p\n\n"
+        f"현재 모델 비중: {current * 100:.2f}%\n"
+        f"새 목표 비중: <b>{target * 100:.2f}%</b>\n"
+        f"조정폭: {change * 100:+.2f}%p\n\n"
         f"신호 확정일: {signal_date:%Y-%m-%d} UTC\n"
         f"적용 기준: {execution_date:%Y-%m-%d} 09:00 KST 이후\n"
         f"확정 종가: ₩{latest['close']:,.0f}\n"

@@ -101,8 +101,8 @@ GitHub에 푸시한 후 Streamlit Community Cloud에서 다음 값을 선택합�
 ## Telegram 비중 변경 알림
 
 GitHub Actions가 매일 00:20 UTC(09:20 KST)에 확정 일봉을 확인합니다. 현재 모델
-비중과 새 목표 비중이 0.5%p보다 크게 다를 때만 매수·매도 판단과 목표 비중을
-Telegram으로 전송합니다.
+비중과 새 목표 비중이 조금이라도 다르면 매수·매도 판단과 목표 비중을 Telegram으로
+전송합니다. 변동성에 따라 목표 비중이 연속적으로 변하는 구간에는 매일 알림이 올 수 있습니다.
 
 저장소의 `Settings > Secrets and variables > Actions`에 다음 Repository secret을
 등록해야 합니다.
