@@ -20,7 +20,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "enable_recovery_reentry": False,
     "recovery_peak_lookback": 90,
     "recovery_event_lookback": 30,
-    "recovery_drawdown_threshold": 0.20,
+    "recovery_drawdown_threshold": 0.25,
     "recovery_rebound_threshold": 0.10,
     "enable_stable_volatility_sizing": False,
     "slow_volatility_days": 60,

@@ -79,6 +79,14 @@ with st.sidebar:
     target_vol_pct = st.slider("목표 연 변동성", 20, 120, 80, 5)
     max_exposure = st.slider("최대 익스포저", 0.50, 1.00, 1.00, 0.05)
     min_exposure = st.slider("최소 익스포저", 0.0, min(0.75, max_exposure), 0.25, 0.05)
+    enable_recovery_reentry = st.checkbox(
+        "급락 후 회복 조기 재진입(실험)",
+        value=False,
+        help=(
+            "최근 90일 고점에서 25% 이상 하락한 뒤 최근 30일 저점 대비 10% 반등하고 "
+            "120일 하단 밴드를 회복하면, 120일 상단 밴드 돌파 전에 재진입합니다."
+        ),
+    )
     st.caption("현물 전용 설정: 투자비중은 원금의 100%를 초과하지 않습니다.")
 
     st.header("비용 설정")
@@ -121,6 +129,9 @@ try:
             "maximum_exposure": max_exposure,
             "transaction_cost_per_turnover": turnover_cost_pct / 100.0,
             "annual_financing_rate": 0.0,
+            "enable_recovery_reentry": enable_recovery_reentry,
+            "recovery_drawdown_threshold": 0.25,
+            "recovery_rebound_threshold": 0.10,
         }
         result = backtest(
             prices,
@@ -155,6 +166,13 @@ try:
 except Exception as exc:
     st.exception(exc)
     st.stop()
+
+actual_data_start = pd.Timestamp(prices.index.min()).date()
+if source == "업비트 최신 데이터" and actual_data_start > download_start:
+    st.warning(
+        f"요청한 {download_start:%Y-%m-%d}보다 이른 업비트 일봉이 없어 실제 데이터는 "
+        f"{actual_data_start:%Y-%m-%d}부터 시작합니다. 평가기간과 CAGR도 이 날짜를 기준으로 계산됩니다."
+    )
 
 m = result.metrics
 daily = result.daily
@@ -427,7 +445,7 @@ with experiment_tab:
         "동일한 기간·비용·다음 날 시가 체결 조건으로 비교합니다. 다른 전략 규칙은 변경하지 않았습니다."
     )
     st.markdown(
-        "- **회복 재진입:** 최근 90일 고점 대비 20% 이상 급락한 이력이 있고, "
+        "- **회복 재진입:** 최근 90일 고점 대비 25% 이상 급락한 이력이 있고, "
         "최근 30일 저점에서 10% 반등하여 120일 하단 밴드로 복귀하면 재진입\n"
         "- **안정형 변동성 비중:** 20일·60일 변동성 중 높은 값을 사용하고, "
         "비중 축소는 즉시·증액은 25%씩 단계적으로 반영"
@@ -513,4 +531,3 @@ st.caption(
     "연구·교육용 백테스트입니다. 과거 성과는 미래 성과를 보장하지 않으며, "
     "파생상품의 실제 펀딩비·청산·체결오차는 단순화되어 있습니다."
 )
-
