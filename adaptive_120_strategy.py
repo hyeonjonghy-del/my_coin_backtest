@@ -17,7 +17,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "maximum_exposure": 1.0,
     "transaction_cost_per_turnover": 0.001,
     "annual_financing_rate": 0.0,
-    "enable_recovery_reentry": False,
+    "enable_recovery_reentry": True,
     "recovery_peak_lookback": 90,
     "recovery_event_lookback": 30,
     "recovery_drawdown_threshold": 0.25,

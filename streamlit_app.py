@@ -81,7 +81,7 @@ with st.sidebar:
     min_exposure = st.slider("최소 익스포저", 0.0, min(0.75, max_exposure), 0.25, 0.05)
     enable_recovery_reentry = st.checkbox(
         "급락 후 회복 조기 재진입(실험)",
-        value=False,
+        value=bool(DEFAULT_CONFIG["enable_recovery_reentry"]),
         help=(
             "최근 90일 고점에서 25% 이상 하락한 뒤 최근 30일 저점 대비 10% 반등하고 "
             "120일 하단 밴드를 회복하면, 120일 상단 밴드 돌파 전에 재진입합니다."
