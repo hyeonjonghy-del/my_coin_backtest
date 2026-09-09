@@ -14,7 +14,7 @@ except ImportError:
     from adaptive_120_strategy import backtest
 
 
-MA_CANDIDATES = (100, 110, 120, 130, 140)
+MA_CANDIDATES = (100, 120, 140, 160, 180)
 
 
 def compare_moving_averages(

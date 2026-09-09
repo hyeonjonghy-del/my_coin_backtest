@@ -20,8 +20,10 @@ except ImportError:
 API_URL = "https://api.upbit.com/v1/candles/days"
 
 
-def _request_candles(to: str | None, count: int = 200) -> list[dict[str, Any]]:
-    query: dict[str, Any] = {"market": "KRW-BTC", "count": min(count, 200)}
+def _request_candles(
+    to: str | None, count: int = 200, market: str = "KRW-BTC"
+) -> list[dict[str, Any]]:
+    query: dict[str, Any] = {"market": market, "count": min(count, 200)}
     if to:
         query["to"] = to
     request = Request(
@@ -32,14 +34,19 @@ def _request_candles(to: str | None, count: int = 200) -> list[dict[str, Any]]:
         return json.loads(response.read().decode("utf-8"))
 
 
-def fetch_upbit_daily(start: str, end: str, include_incomplete: bool = False) -> pd.DataFrame:
+def fetch_upbit_daily(
+    start: str,
+    end: str,
+    include_incomplete: bool = False,
+    market: str = "KRW-BTC",
+) -> pd.DataFrame:
     start_ts = pd.Timestamp(start, tz="UTC")
     end_ts = pd.Timestamp(end, tz="UTC") + pd.Timedelta(days=1)
     cursor = end_ts.strftime("%Y-%m-%dT%H:%M:%SZ")
     records: list[dict[str, Any]] = []
 
     while True:
-        batch = _request_candles(cursor)
+        batch = _request_candles(cursor, market=market)
         if not batch:
             break
         records.extend(batch)

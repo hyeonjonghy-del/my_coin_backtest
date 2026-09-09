@@ -32,18 +32,36 @@ except ImportError:  # Direct `streamlit run` execution from this directory.
 HERE = Path(__file__).resolve().parent
 DEFAULT_DATA_START = date(2018, 1, 1)
 DEFAULT_EVALUATION_START = date(2018, 5, 1)
+ASSET_CONFIGS = {
+    "BTC/KRW": {
+        "market": "KRW-BTC",
+        "moving_average_days": 120,
+        "entry_exit_buffer": 2.0,
+        "realized_volatility_days": 20,
+        "target_annual_volatility": 80,
+        "enable_recovery_reentry": True,
+    },
+    "ETH/KRW": {
+        "market": "KRW-ETH",
+        "moving_average_days": 160,
+        "entry_exit_buffer": 2.0,
+        "realized_volatility_days": 20,
+        "target_annual_volatility": 65,
+        "enable_recovery_reentry": False,
+    },
+}
 
 
 st.set_page_config(
-    page_title="Upbit BTC Adaptive 120 Backtest",
+    page_title="Upbit Coin Adaptive Backtest",
     page_icon="₿",
     layout="wide",
 )
 
 
 @st.cache_data(ttl=21600, max_entries=4, show_spinner=False)
-def download_prices(start: str, end: str) -> pd.DataFrame:
-    return fetch_upbit_daily(start, end, include_incomplete=False)
+def download_prices(market: str, start: str, end: str) -> pd.DataFrame:
+    return fetch_upbit_daily(start, end, include_incomplete=False, market=market)
 
 
 def metric_percent(label: str, value: float, comparison: float | None = None) -> None:
@@ -51,13 +69,17 @@ def metric_percent(label: str, value: float, comparison: float | None = None) ->
     st.metric(label, f"{value * 100:,.2f}%", delta)
 
 
+st.sidebar.header("대상 코인")
+asset_label = st.sidebar.selectbox("대상 코인", list(ASSET_CONFIGS))
+asset = ASSET_CONFIGS[asset_label]
+
 title_column, run_column = st.columns([5, 1], vertical_alignment="center")
 with title_column:
-    st.title("코인 전용 BTC/KRW Adaptive 120 백테스트")
+    st.title(f"코인 전용 {asset_label} Adaptive 백테스트")
 with run_column:
     run_clicked = st.button("백테스트 실행", type="primary", width="stretch")
 st.caption(
-    "확정 일봉의 120일 추세와 20일 실현변동성으로 익스포저를 조절합니다. "
+    "확정 일봉의 추세와 실현변동성으로 익스포저를 조절합니다. "
     "기본값은 업비트 현물 운용 기준이며, 반감기는 참고 정보로만 사용합니다."
 )
 
@@ -77,18 +99,20 @@ with st.sidebar:
         )
 
     st.header("전략 설정")
-    ma_days = st.slider("이동평균 기간", 60, 240, 120, 5)
-    buffer_pct = st.slider("진입·청산 완충폭", 0.0, 5.0, 2.0, 0.25)
-    vol_days = st.slider("실현변동성 기간", 10, 60, 20)
-    target_vol_pct = st.slider("목표 연 변동성", 20, 120, 80, 5)
+    ma_days = st.slider("이동평균 기간", 60, 240, asset["moving_average_days"], 5, key=f"ma_{asset['market']}")
+    buffer_pct = st.slider("진입·청산 완충폭", 0.0, 5.0, asset["entry_exit_buffer"], 0.25, key=f"buffer_{asset['market']}")
+    vol_days = st.slider("실현변동성 기간", 10, 60, asset["realized_volatility_days"], key=f"vol_{asset['market']}")
+    target_vol_pct = st.slider("목표 연 변동성", 20, 120, asset["target_annual_volatility"], 5, key=f"target_{asset['market']}")
     max_exposure = st.slider("최대 익스포저", 0.50, 1.00, 1.00, 0.05)
     min_exposure = st.slider("최소 익스포저", 0.0, min(0.75, max_exposure), 0.25, 0.05)
     enable_recovery_reentry = st.checkbox(
         "급락 후 회복 조기 재진입(실험)",
-        value=bool(DEFAULT_CONFIG["enable_recovery_reentry"]),
+        value=asset["enable_recovery_reentry"],
+        key=f"recovery_{asset['market']}",
         help=(
             "최근 90일 고점에서 25% 이상 하락한 뒤 최근 30일 저점 대비 10% 반등하고 "
-            "120일 하단 밴드를 회복하면, 120일 상단 밴드 돌파 전에 재진입합니다."
+            f"{asset['moving_average_days']}일 하단 밴드를 회복하면, "
+            f"{asset['moving_average_days']}일 상단 밴드 돌파 전에 재진입합니다."
         ),
     )
     st.caption("현물 전용 설정: 투자비중은 원금의 100%를 초과하지 않습니다.")
@@ -112,7 +136,7 @@ if evaluation_end <= evaluation_start:
 try:
     with st.spinner("일봉 데이터를 준비하고 백테스트하는 중입니다..."):
         if source == "업비트 최신 데이터":
-            prices = download_prices(download_start.isoformat(), evaluation_end.isoformat())
+            prices = download_prices(asset["market"], download_start.isoformat(), evaluation_end.isoformat())
         else:
             if uploaded is None:
                 st.error("CSV 파일을 먼저 업로드하세요.")
@@ -173,7 +197,7 @@ except Exception as exc:
 actual_data_start = pd.Timestamp(prices.index.min()).date()
 if source == "업비트 최신 데이터" and actual_data_start > download_start:
     st.warning(
-        f"요청한 {download_start:%Y-%m-%d}보다 이른 업비트 일봉이 없어 실제 데이터는 "
+        f"요청한 {download_start:%Y-%m-%d}보다 이른 {asset_label} 업비트 일봉이 없어 실제 데이터는 "
         f"{actual_data_start:%Y-%m-%d}부터 시작합니다. 평가기간과 CAGR도 이 날짜를 기준으로 계산됩니다."
     )
 
@@ -241,7 +265,7 @@ with performance_tab:
 
     execution_message = (
         f"{execution_date:%Y-%m-%d} UTC 00:00(KST 09:00) 일봉 시가부터 "
-        f"BTC 비중을 {target_exposure * 100:.1f}%로 맞춥니다."
+        f"{asset_label} 비중을 {target_exposure * 100:.1f}%로 맞춥니다."
     )
     if action in {"매수", "추가 매수"}:
         st.success(f"매수 신호: {execution_message}")
@@ -290,7 +314,7 @@ with performance_tab:
     with c4:
         st.metric("평균 익스포저", f"{m['strategy_average_exposure'] * 100:.1f}%")
 
-    strategy_label = f"Adaptive {ma_days}"
+    strategy_label = f"{asset_label} Adaptive {ma_days}"
     comparison = pd.DataFrame(
         {
             strategy_label: {
@@ -317,7 +341,7 @@ with performance_tab:
 
     st.subheader("자산곡선")
     equity = daily[["strategy_equity", "buy_hold_equity"]].rename(
-        columns={"strategy_equity": f"Adaptive {ma_days}", "buy_hold_equity": "단순보유"}
+        columns={"strategy_equity": strategy_label, "buy_hold_equity": "단순보유"}
     )
     st.line_chart(downsample_for_chart(equity))
 
@@ -332,7 +356,7 @@ with performance_tab:
     st.subheader("가격과 추세 밴드")
     st.line_chart(
         downsample_for_chart(daily[["close", "sma", "upper_band", "lower_band"]]).rename(
-            columns={"close": "BTC/KRW", "sma": "SMA", "upper_band": "상단", "lower_band": "하단"}
+            columns={"close": asset_label, "sma": "SMA", "upper_band": "상단", "lower_band": "하단"}
         )
     )
 
@@ -344,7 +368,7 @@ with performance_tab:
     st.download_button(
         "일별 결과 CSV 다운로드",
         data=daily.to_csv(index=True).encode("utf-8-sig"),
-        file_name="upbit_btc_adaptive_120_backtest.csv",
+        file_name=f"upbit_{asset['market'].lower()}_adaptive_backtest.csv",
         mime="text/csv",
     )
     st.download_button(
@@ -355,7 +379,7 @@ with performance_tab:
     )
 
 with comparison_tab:
-    st.subheader("100·110·120·130·140일 이동평균 비교")
+    st.subheader("100·120·140·160·180일 이동평균 비교")
     st.caption(
         "모든 후보에 동일한 기간, 완충폭, 변동성 목표, 비용 조건을 적용합니다. "
         "수익률만이 아니라 MDD와 Sharpe를 함께 확인하세요."
@@ -444,12 +468,12 @@ with validation_tab:
 with experiment_tab:
     st.subheader("체크한 두 로직의 통제 실험")
     st.caption(
-        "기존 Adaptive 120, 급락 후 회복 재진입만, 안정형 변동성 비중만, 두 로직 결합을 "
+        f"기존 Adaptive {ma_days}, 급락 후 회복 재진입만, 안정형 변동성 비중만, 두 로직 결합을 "
         "동일한 기간·비용·다음 날 시가 체결 조건으로 비교합니다. 다른 전략 규칙은 변경하지 않았습니다."
     )
     st.markdown(
         "- **회복 재진입:** 최근 90일 고점 대비 25% 이상 급락한 이력이 있고, "
-        "최근 30일 저점에서 10% 반등하여 120일 하단 밴드로 복귀하면 재진입\n"
+        f"최근 30일 저점에서 10% 반등하여 {ma_days}일 하단 밴드로 복귀하면 재진입\n"
         "- **안정형 변동성 비중:** 20일·60일 변동성 중 높은 값을 사용하고, "
         "비중 축소는 즉시·증액은 25%씩 단계적으로 반영"
     )
@@ -465,7 +489,7 @@ with experiment_tab:
     )
     st.dataframe(experiment_display, width="stretch")
 
-    baseline = logic_comparison.loc["기존 Adaptive 120"]
+    baseline = logic_comparison.loc["기존 Adaptive"]
     combined = logic_comparison.loc["두 로직 결합"]
     d1, d2, d3 = st.columns(3)
     d1.metric(

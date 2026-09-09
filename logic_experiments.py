@@ -16,7 +16,7 @@ except ImportError:
 
 
 EXPERIMENTS = {
-    "기존 Adaptive 120": {},
+    "기존 Adaptive": {},
     "회복 재진입만": {"enable_recovery_reentry": True},
     "안정형 변동성 비중만": {"enable_stable_volatility_sizing": True},
     "두 로직 결합": {
@@ -37,7 +37,6 @@ def compare_logic_experiments(
     for name, overrides in EXPERIMENTS.items():
         cfg = {
             **dict(base_config),
-            "moving_average_days": 120,
             "enable_recovery_reentry": False,
             "enable_stable_volatility_sizing": False,
             **overrides,
