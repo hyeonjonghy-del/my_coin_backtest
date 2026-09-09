@@ -23,8 +23,9 @@ def test_skips_unchanged_exposure():
 
 
 def test_formats_changed_exposure():
-    changed, message = build_alert(sample(0.25, 0.75))
+    changed, message = build_alert(sample(0.25, 0.75), "ETH")
     assert changed
+    assert "ETH Adaptive" in message
     assert "추가 매수" in message
     assert "75.00%" in message
     assert "+50.00%p" in message

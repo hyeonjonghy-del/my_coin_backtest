@@ -1,4 +1,4 @@
-"""Send a Telegram alert when the Adaptive 120 model exposure changes."""
+"""Send Telegram alerts when the BTC or ETH model exposure changes."""
 
 from __future__ import annotations
 
@@ -17,8 +17,13 @@ from run import fetch_upbit_daily
 
 CHANGE_TOLERANCE = 1e-9
 
+ASSETS = (
+    ("BTC", "KRW-BTC", {"moving_average_days": 120, "target_annual_volatility": 0.80, "enable_recovery_reentry": True}),
+    ("ETH", "KRW-ETH", {"moving_average_days": 160, "target_annual_volatility": 0.65, "enable_recovery_reentry": False}),
+)
 
-def build_alert(daily: pd.DataFrame) -> tuple[bool, str]:
+
+def build_alert(daily: pd.DataFrame, asset_name: str = "BTC") -> tuple[bool, str]:
     latest = daily.iloc[-1]
     current = float(latest["position"])
     target = float(latest["desired_exposure"])
@@ -38,7 +43,7 @@ def build_alert(daily: pd.DataFrame) -> tuple[bool, str]:
     signal_date = pd.Timestamp(latest.name)
     execution_date = signal_date + pd.DateOffset(days=1)
     message = (
-        "🔔 <b>BTC Adaptive 120 비중 변경</b>\n\n"
+        f"🔔 <b>{asset_name} Adaptive 비중 변경</b>\n\n"
         f"판단: <b>{action}</b>\n"
         f"현재 모델 비중: {current * 100:.2f}%\n"
         f"새 목표 비중: <b>{target * 100:.2f}%</b>\n"
@@ -46,7 +51,7 @@ def build_alert(daily: pd.DataFrame) -> tuple[bool, str]:
         f"신호 확정일: {signal_date:%Y-%m-%d} UTC\n"
         f"적용 기준: {execution_date:%Y-%m-%d} 09:00 KST 이후\n"
         f"확정 종가: ₩{latest['close']:,.0f}\n"
-        f"120일 이동평균: ₩{latest['sma']:,.0f}\n"
+        f"이동평균: ₩{latest['sma']:,.0f}\n"
         f"20일 실현변동성: {latest['realized_volatility'] * 100:.1f}%\n\n"
         "주문 참고금액 = 현재 총 평가금액 × 조정폭"
     )
@@ -81,19 +86,18 @@ def send_telegram(message: str) -> None:
 
 def main() -> None:
     today = datetime.now(timezone.utc).date().isoformat()
-    prices = fetch_upbit_daily("2017-09-25", today, include_incomplete=False)
-    result = backtest(
-        prices,
-        DEFAULT_CONFIG,
-        evaluation_start="2018-05-01",
-        evaluation_end=today,
-    )
-    changed, message = build_alert(result.daily)
-    if not changed:
-        print("No model exposure change; Telegram alert skipped.")
+    alerts: list[str] = []
+    for asset_name, market, overrides in ASSETS:
+        prices = fetch_upbit_daily("2017-09-25", today, include_incomplete=False, market=market)
+        result = backtest(prices, {**DEFAULT_CONFIG, **overrides}, evaluation_start="2018-05-01", evaluation_end=today)
+        changed, message = build_alert(result.daily, asset_name)
+        if changed:
+            alerts.append(message)
+    if not alerts:
+        print("No BTC or ETH model exposure change; Telegram alert skipped.")
         return
-    send_telegram(message)
-    print("Telegram exposure-change alert sent.")
+    send_telegram("\n\n━━━━━━━━━━━━\n\n".join(alerts))
+    print(f"Telegram exposure-change alert sent for {len(alerts)} asset(s).")
 
 
 if __name__ == "__main__":
