@@ -91,9 +91,24 @@ GitHub에 푸시한 후 Streamlit Community Cloud에서 다음 값을 선택합�
 
 ### 두 로직 실험의 고정 규칙
 
-- 회복 재진입: 최근 90일 고점 대비 20% 이상 급락한 이력이 있는 상태에서
+- 회복 재진입: 최근 90일 고점 대비 25% 이상 급락한 이력이 있는 상태에서
   최근 30일 저점 대비 10% 반등하고 SMA120 하단 밴드로 복귀하면 재진입
 - 안정형 변동성 비중: 20일과 60일 연율 변동성 중 높은 값을 사용하며,
   비중 축소는 즉시 반영하고 비중 증액은 목표와의 차이 중 25%씩 반영
 - 결과가 기존 Adaptive 120의 CAGR·MDD·Sharpe를 모두 개선하지 못하면
   기본 전략으로 자동 채택하지 않고 연구 후보로만 표시
+
+## Telegram 비중 변경 알림
+
+GitHub Actions가 매일 00:20 UTC(09:20 KST)에 확정 일봉을 확인합니다. 현재 모델
+비중과 새 목표 비중이 0.5%p보다 크게 다를 때만 매수·매도 판단과 목표 비중을
+Telegram으로 전송합니다.
+
+저장소의 `Settings > Secrets and variables > Actions`에 다음 Repository secret을
+등록해야 합니다.
+
+- `TELEGRAM_BOT_TOKEN`: BotFather가 발급한 봇 토큰
+- `TELEGRAM_CHAT_ID`: 알림을 받을 Telegram 채팅 ID
+
+워크플로 파일은 `.github/workflows/telegram-alert.yml`이며 Actions 화면의
+`Telegram BTC exposure alert`에서 수동 실행도 가능합니다.
