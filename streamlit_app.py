@@ -51,7 +51,11 @@ def metric_percent(label: str, value: float, comparison: float | None = None) ->
     st.metric(label, f"{value * 100:,.2f}%", delta)
 
 
-st.title("코인 전용 BTC/KRW Adaptive 120 백테스트")
+title_column, run_column = st.columns([5, 1], vertical_alignment="center")
+with title_column:
+    st.title("코인 전용 BTC/KRW Adaptive 120 백테스트")
+with run_column:
+    run_clicked = st.button("백테스트 실행", type="primary", width="stretch")
 st.caption(
     "확정 일봉의 120일 추세와 20일 실현변동성으로 익스포저를 조절합니다. "
     "기본값은 업비트 현물 운용 기준이며, 반감기는 참고 정보로만 사용합니다."
@@ -93,7 +97,6 @@ with st.sidebar:
     turnover_cost_pct = st.number_input(
         "비중 변경 비용(%)", min_value=0.0, max_value=2.0, value=0.10, step=0.01
     )
-    run_clicked = st.button("백테스트 실행", type="primary", width="stretch")
 
 if not run_clicked:
     st.info("왼쪽에서 조건을 설정한 뒤 ‘백테스트 실행’을 누르세요.")
