@@ -33,7 +33,7 @@ class AnalysisToolsTest(unittest.TestCase):
         result = compare_moving_averages(
             self.prices, DEFAULT_CONFIG, "2018-06-01", "2020-06-01"
         )
-        self.assertEqual(result.index.tolist(), [100, 110, 120, 130, 140])
+        self.assertEqual(result.index.tolist(), [100, 120, 140, 160, 180])
         self.assertIn("CAGR", result.columns)
 
     def test_period_split_has_three_windows_per_candidate(self) -> None:

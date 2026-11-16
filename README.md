@@ -111,4 +111,6 @@ GitHub Actions가 매일 00:20 UTC(09:20 KST)에 확정 일봉을 확인합니�
 - `TELEGRAM_CHAT_ID`: 알림을 받을 Telegram 채팅 ID
 
 워크플로 파일은 `.github/workflows/telegram-alert.yml`이며 Actions 화면의
-`Telegram BTC exposure alert`에서 수동 실행도 가능합니다.
+`Telegram BTC and ETH exposure alert`에서 수동 실행할 수 있습니다. 수동 실행은
+비중 변경이 없어도 연결 확인용 테스트 메시지를 반드시 전송합니다. 예약 작업은 매월
+저장소 활동 기록을 남겨 공개 저장소의 60일 비활성화로 중단되지 않도록 구성했습니다.

@@ -3,14 +3,15 @@ name: Telegram BTC and ETH exposure alert
 on:
   schedule:
     # Upbit's daily candle closes at 00:00 UTC (09:00 KST).
-    - cron: "20 0 * * *"
+    - cron: "23 0 * * *"
+    # A monthly repository heartbeat prevents GitHub from disabling scheduled
+    # workflows after 60 days of inactivity in this public repository.
+    - cron: "37 3 1 * *"
   workflow_dispatch:
-
-permissions:
-  contents: read
 
 jobs:
   check-exposure:
+    if: github.event.schedule != '37 3 1 * *'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -27,4 +28,23 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_TEST_MODE: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
         run: python telegram_alert.py
+
+  keep-schedule-active:
+    if: github.event.schedule == '37 3 1 * *'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Record monthly workflow heartbeat
+        shell: bash
+        run: |
+          date -u +'%Y-%m-%dT%H:%M:%SZ' > .github/telegram-alert-heartbeat.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/telegram-alert-heartbeat.txt
+          git diff --cached --quiet || git commit -m 'Keep Telegram alert schedule active'
+          git push
