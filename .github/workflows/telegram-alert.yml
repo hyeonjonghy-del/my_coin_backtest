@@ -4,6 +4,8 @@ on:
   schedule:
     # Upbit's daily candle closes at 00:00 UTC (09:00 KST).
     - cron: "23 0 * * *"
+    # Weekly delivery proof, Sunday 09:28 KST.
+    - cron: "28 0 * * 0"
     # A monthly repository heartbeat prevents GitHub from disabling scheduled
     # workflows after 60 days of inactivity in this public repository.
     - cron: "37 3 1 * *"
@@ -29,6 +31,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_TEST_MODE: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+          TELEGRAM_HEALTHCHECK_MODE: ${{ github.event.schedule == '28 0 * * 0' && '1' || '0' }}
         run: python telegram_alert.py
 
   keep-schedule-active:

@@ -96,6 +96,7 @@ def main() -> None:
     # there was nothing to send that day.
     telegram_credentials()
     test_mode = os.environ.get("TELEGRAM_TEST_MODE", "").strip() == "1"
+    healthcheck_mode = os.environ.get("TELEGRAM_HEALTHCHECK_MODE", "").strip() == "1"
     today = datetime.now(timezone.utc).date().isoformat()
     alerts: list[str] = []
     for asset_name, market, overrides in ASSETS:
@@ -112,6 +113,14 @@ def main() -> None:
                 "현재 BTC·ETH 모델의 비중 변경 신호는 없습니다."
             )
             print("Telegram test alert sent successfully; no exposure change today.")
+            return
+        if healthcheck_mode:
+            send_telegram(
+                "✅ <b>Adaptive 알림 주간 점검</b>\n\n"
+                "BTC·ETH 비중 변경 알림 채널이 정상 작동 중입니다.\n"
+                "현재는 비중 변경 신호가 없습니다."
+            )
+            print("Telegram weekly health-check alert sent; no exposure change today.")
             return
         print("No BTC or ETH model exposure change; Telegram alert skipped.")
         return
