@@ -251,8 +251,22 @@ monthly_display = monthly_returns.apply(
     lambda column: column.map(lambda value: "-" if pd.isna(value) else f"{value * 100:+.2f}%")
 )
 
-performance_tab, comparison_tab, validation_tab, experiment_tab, monthly_tab = st.tabs(
-    ["성과", "이평선 비교", "기간분할 검증", "2개 로직 실험", "월별 수익률"]
+target_history = daily[["desired_exposure", "close", "signal"]].copy()
+target_history["이전 목표 비중"] = target_history["desired_exposure"].shift(1)
+target_history["조정폭"] = target_history["desired_exposure"] - target_history["이전 목표 비중"]
+target_history = target_history.loc[target_history["조정폭"].abs() > 1e-9].copy()
+target_history["판단"] = "일부 매도"
+target_history.loc[target_history["desired_exposure"] <= 1e-9, "판단"] = "전량 매도"
+target_history.loc[target_history["이전 목표 비중"] <= 1e-9, "판단"] = "매수"
+target_history.loc[
+    (target_history["이전 목표 비중"] > 1e-9) & (target_history["조정폭"] > 0), "판단"
+] = "추가 매수"
+target_history["전략 상태"] = target_history["signal"].map(signal_name).fillna(target_history["signal"])
+target_history["적용일"] = target_history.index + pd.DateOffset(days=1)
+target_history.index.name = "신호 확정일"
+
+performance_tab, history_tab, comparison_tab, validation_tab, experiment_tab, monthly_tab = st.tabs(
+    ["성과", "비중 변경 이력", "이평선 비교", "기간분할 검증", "2개 로직 실험", "월별 수익률"]
 )
 
 with performance_tab:
@@ -376,6 +390,40 @@ with performance_tab:
         data=json.dumps(m, ensure_ascii=False, indent=2, allow_nan=True).encode("utf-8"),
         file_name="upbit_btc_adaptive_120_metrics.json",
         mime="application/json",
+    )
+
+with history_tab:
+    st.subheader("비중 변경 이력")
+    st.caption(
+        "신호 확정일의 종가 기준으로 계산한 목표 비중입니다. 주문은 표의 적용일 KST 09:00 이후에 "
+        "새 목표 비중으로 조정합니다. 작은 변동까지 포함해 모든 변경을 표시합니다."
+    )
+    history_display = target_history.loc[
+        :, ["적용일", "판단", "이전 목표 비중", "desired_exposure", "조정폭", "close", "전략 상태"]
+    ].rename(
+        columns={
+            "desired_exposure": "새 목표 비중",
+            "close": "확정 종가",
+        }
+    ).sort_index(ascending=False)
+    history_display.index = history_display.index.strftime("%Y-%m-%d")
+    history_display["적용일"] = history_display["적용일"].dt.strftime("%Y-%m-%d")
+    st.dataframe(
+        history_display.style.format(
+            {
+                "이전 목표 비중": "{:.2%}",
+                "새 목표 비중": "{:.2%}",
+                "조정폭": lambda value: f"{value * 100:+.2f}%p",
+                "확정 종가": "₩{:,.0f}",
+            }
+        ),
+        width="stretch",
+    )
+    st.download_button(
+        "비중 변경 이력 CSV 다운로드",
+        data=history_display.to_csv(index=True).encode("utf-8-sig"),
+        file_name=f"upbit_{asset['market'].lower()}_exposure_history.csv",
+        mime="text/csv",
     )
 
 with comparison_tab:
