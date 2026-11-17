@@ -4,6 +4,7 @@ import json
 from datetime import date, datetime, timezone
 from pathlib import Path
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 
@@ -610,7 +611,27 @@ with monthly_tab:
     ).mul(100.0)
     annual_comparison.index.name = "연도"
     st.subheader("연도별 수익률 비교")
-    st.bar_chart(annual_comparison)
+    annual_chart_data = (
+        annual_comparison.reset_index()
+        .melt(id_vars="연도", var_name="구분", value_name="수익률")
+    )
+    annual_chart = (
+        alt.Chart(annual_chart_data)
+        .mark_bar()
+        .encode(
+            x=alt.X("연도:O", title="연도"),
+            xOffset=alt.XOffset("구분:N"),
+            y=alt.Y("수익률:Q", title="수익률 (%)"),
+            color=alt.Color("구분:N", title=None),
+            tooltip=[
+                alt.Tooltip("연도:O"),
+                alt.Tooltip("구분:N"),
+                alt.Tooltip("수익률:Q", format="+.2f"),
+            ],
+        )
+        .properties(height=400)
+    )
+    st.altair_chart(annual_chart, width="stretch")
     st.caption("각 연도의 복리 수익률입니다. 막대가 0% 아래이면 해당 연도 손실을 뜻합니다.")
 
     st.download_button(
