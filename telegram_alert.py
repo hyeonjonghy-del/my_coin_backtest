@@ -116,7 +116,7 @@ def main() -> None:
         print("No BTC or ETH model exposure change; Telegram alert skipped.")
         return
     send_telegram("\n\n━━━━━━━━━━━━\n\n".join(alerts))
-    print(f"Telegram exposure-change alert sent for {len(alerts)} asset(s).")
+    print(f"Telegram alert sent with {len(alerts)} message section(s).")
 
 
 if __name__ == "__main__":
