@@ -596,6 +596,23 @@ with monthly_tab:
     st.caption(
         "각 월의 전략 수익률이며, 맨 오른쪽 ‘연 수익률’은 해당 연도의 월 수익률을 복리로 합산한 값입니다."
     )
+
+    annual_comparison = pd.DataFrame(
+        {
+            f"전략 ({asset_label} Adaptive {ma_days})": annual_returns,
+            "단순보유": (
+                (1.0 + daily["buy_hold_return"].fillna(0.0))
+                .groupby(daily.index.year)
+                .prod()
+                .sub(1.0)
+            ),
+        }
+    ).mul(100.0)
+    annual_comparison.index.name = "연도"
+    st.subheader("연도별 수익률 비교")
+    st.bar_chart(annual_comparison)
+    st.caption("각 연도의 복리 수익률입니다. 막대가 0% 아래이면 해당 연도 손실을 뜻합니다.")
+
     st.download_button(
         "월별 수익률 CSV 다운로드",
         data=monthly_returns.to_csv(index=True).encode("utf-8-sig"),
