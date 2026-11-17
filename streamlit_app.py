@@ -223,12 +223,13 @@ elif adjustment > 0:
 else:
     action = "일부 매도"
 
-signal_name = {
+signal_labels = {
     "RECOVERY_REENTRY": "급락 후 회복 재진입",
     "ENTER_OR_HOLD": "상승 추세 진입·유지",
     "EXIT_OR_CASH": "추세 이탈·현금화",
     "HYSTERESIS_HOLD": "완충 구간·기존 상태 유지",
-}.get(str(latest["signal"]), str(latest["signal"]))
+}
+signal_name = signal_labels.get(str(latest["signal"]), str(latest["signal"]))
 
 monthly_returns = (
     (1.0 + daily["strategy_return"].fillna(0.0))
@@ -261,7 +262,7 @@ target_history.loc[target_history["이전 목표 비중"] <= 1e-9, "판단"] = "
 target_history.loc[
     (target_history["이전 목표 비중"] > 1e-9) & (target_history["조정폭"] > 0), "판단"
 ] = "추가 매수"
-target_history["전략 상태"] = target_history["signal"].map(signal_name).fillna(target_history["signal"])
+target_history["전략 상태"] = target_history["signal"].map(signal_labels).fillna(target_history["signal"])
 target_history["적용일"] = target_history.index + pd.DateOffset(days=1)
 target_history.index.name = "신호 확정일"
 
